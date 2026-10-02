@@ -1,13 +1,37 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/chat", "destination": "/" },
-    { "source": "/games", "destination": "/" },
-    { "source": "/games/block-blast", "destination": "/" },
-    { "source": "/games/space-shooter", "destination": "/" },
-    { "source": "/tools", "destination": "/" },
-    { "source": "/tools/tiktok", "destination": "/" },
-    { "source": "/projects", "destination": "/" },
-    { "source": "/projects/am-premium", "destination": "/" },
-    { "source": "/projects/telegram-bot", "destination": "/" }
+    {
+      "source": "/games",
+      "destination": "/"
+    },
+    {
+      "source": "/games/block-blast",
+      "destination": "/"
+    },
+    {
+      "source": "/games/space-shooter",
+      "destination": "/"
+    },
+    {
+      "source": "/tools",
+      "destination": "/"
+    },
+    {
+      "source": "/tools/tiktok",
+      "destination": "/"
+    },
+    {
+      "source": "/projects",
+      "destination": "/"
+    },
+    {
+      "source": "/projects/am-premium",
+      "destination": "/"
+    },
+    {
+      "source": "/projects/telegram-bot",
+      "destination": "/"
+    }
   ]
 }
