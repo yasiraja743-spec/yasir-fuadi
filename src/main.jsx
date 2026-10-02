@@ -17,13 +17,25 @@ function Intro({done}) {
   </div>
 }
 
+function Icon({name, size=20}) {
+  const paths = {
+    home: <><path d="M3 10.5 10 4l7 6.5"/><path d="M5 9.5V17h10V9.5"/><path d="M8 17v-4h4v4"/></>,
+    chat: <><path d="M4 5.5h12v8H9l-4 3v-3H4z"/><path d="M7 9.5h6"/></>,
+    game: <><rect x="3" y="6" width="14" height="9" rx="4"/><path d="M7 10v3M5.5 11.5h3M12.5 10.5h.01M14.5 12.5h.01"/></>,
+    tool: <><path d="m6 4 4 4-6 6 2 2 6-6 4 4"/><path d="m13 4 3 3"/></>,
+    project: <><rect x="3" y="4" width="14" height="13" rx="1"/><path d="M3 8h14M7 4v4"/></>,
+    arrow: <><path d="M5 12h8"/><path d="m10 7 5 5-5 5"/></>,
+  };
+  return <svg className="icon" width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+}
+
 function Header({openMenu, setOpenMenu}) {
   return <header className="topbar">
     <button className="menu-btn" onClick={()=>setOpenMenu(v=>!v)} aria-label="Open menu">
       <span></span><span></span><span></span>
     </button>
     <div className="brand">YASIR<span>.</span></div>
-    <div className="top-code">FS.DEV / 001</div>
+    <div className="top-tools"><span className="status-dot"></span><span className="top-code">FS.DEV / 001</span></div>
   </header>
 }
 
@@ -96,68 +108,205 @@ function Games({navigate}) {
   </main>
 }
 
-const SHAPES = [
-  [[1,1],[1,1]], [[1,1,1]], [[1,0],[1,1]], [[0,1],[1,1]], [[1,1,1,1]], [[1],[1],[1]], [[1,1,0],[0,1,1]]
+const BLOCK_SHAPES = [
+  [[1]], [[1,1]], [[1,1,1]], [[1,1,1,1]], [[1,1,1,1,1]],
+  [[1],[1]], [[1],[1],[1]], [[1],[1],[1],[1]],
+  [[1,1],[1,1]], [[1,1,1],[1,1,1]], [[1,1,1],[1,1,1],[1,1,1]],
+  [[1,0],[1,1]], [[0,1],[1,1]], [[1,1],[1,0]], [[1,1],[0,1]],
+  [[1,0],[1,1],[1,0]], [[0,1],[1,1],[0,1]],
+  [[1,1,0],[0,1,1]], [[0,1,1],[1,1,0]],
+  [[1,1,1],[0,1,0]], [[0,1,0],[1,1,1]]
 ];
-function BlockBlast() {
-  const W=8,H=12;
-  const empty=()=>Array.from({length:H},()=>Array(W).fill(0));
-  const [grid,setGrid]=useState(empty), [piece,setPiece]=useState(0), [x,setX]=useState(2), [y,setY]=useState(0), [score,setScore]=useState(0), [over,setOver]=useState(false);
-  const shape=SHAPES[piece];
-  const valid=(nx=x,ny=y,s=shape,g=grid)=>{
-    return s.every((r,dy)=>r.every((v,dx)=>!v || (nx+dx>=0&&nx+dx<W&&ny+dy<H&&ny+dy>=0&&!g[ny+dy][nx+dx])));
-  };
-  const spawn=()=>{
-    const p=Math.floor(Math.random()*SHAPES.length), s=SHAPES[p], sx=Math.floor((W-s[0].length)/2);
-    setPiece(p);setX(sx);setY(0);
-    if(!valid(sx,0,s,grid)) setOver(true);
-  };
-  useEffect(()=>{ if(over)return; const t=setInterval(()=>{
-    if(valid(x,y+1)) setY(v=>v+1);
-    else {
-      const ng=grid.map(r=>r.slice()); shape.forEach((r,dy)=>r.forEach((v,dx)=>{if(v)ng[y+dy][x+dx]=1;}));
-      const cleared=ng.filter(r=>r.every(Boolean)).length;
-      const kept=ng.filter(r=>!r.every(Boolean)); while(kept.length<H) kept.unshift(Array(W).fill(0));
-      setGrid(kept); setScore(s=>s+(cleared?cleared*100:10)); spawn();
+const BLOCK_COLORS = ["lime","pink","blue","orange","violet"];
+
+function randomPiece(){
+  return BLOCK_SHAPES[Math.floor(Math.random()*BLOCK_SHAPES.length)];
+}
+function makePiece(){
+  return {shape: randomPiece(), color: BLOCK_COLORS[Math.floor(Math.random()*BLOCK_COLORS.length)]};
+}
+function canPlace(board, shape, row, col){
+  for(let y=0;y<shape.length;y++) for(let x=0;x<shape[y].length;x++) if(shape[y][x]){
+    const gy=row+y,gx=col+x;
+    if(gy<0||gy>=10||gx<0||gx>=10||board[gy][gx]) return false;
+  }
+  return true;
+}
+function BlockBlast(){
+  const empty=()=>Array.from({length:10},()=>Array(10).fill(null));
+  const [board,setBoard]=useState(empty);
+  const [pieces,setPieces]=useState(()=>[makePiece(),makePiece(),makePiece()]);
+  const [selected,setSelected]=useState(null);
+  const [hover,setHover]=useState(null);
+  const [score,setScore]=useState(0);
+  const [best,setBest]=useState(()=>Number(localStorage.getItem('yasir-block-best')||0));
+  const [over,setOver]=useState(false);
+
+  const place=(pieceIndex,row,col)=>{
+    if(over) return;
+    const piece=pieces[pieceIndex];
+    if(!piece || !canPlace(board,piece.shape,row,col)) return;
+    const next=board.map(r=>r.slice());
+    let cells=0;
+    piece.shape.forEach((r,y)=>r.forEach((v,x)=>{if(v){next[row+y][col+x]={color:piece.color};cells++;}}));
+    const fullRows=[];
+    const fullCols=[];
+    for(let y=0;y<10;y++) if(next[y].every(Boolean)) fullRows.push(y);
+    for(let x=0;x<10;x++) if(next.every(r=>r[x])) fullCols.push(x);
+    const clearCount=new Set([...fullRows,...fullCols]).size;
+    const cleared=new Set([...fullRows.map(y=>`r${y}`),...fullCols.map(x=>`c${x}`)]);
+    if(fullRows.length||fullCols.length){
+      for(const y of fullRows) for(let x=0;x<10;x++) next[y][x]=null;
+      for(const x of fullCols) for(let y=0;y<10;y++) next[y][x]=null;
     }
-  },520); return()=>clearInterval(t)},[x,y,grid,piece,over]);
-  useEffect(()=>{ const k=e=>{if(over)return;if(e.key==="ArrowLeft"&&valid(x-1,y))setX(v=>v-1);if(e.key==="ArrowRight"&&valid(x+1,y))setX(v=>v+1);if(e.key==="ArrowDown"&&valid(x,y+1))setY(v=>v+1);if(e.key===" "){e.preventDefault();let yy=y;while(valid(x,yy+1))yy++;setY(yy)}};addEventListener("keydown",k);return()=>removeEventListener("keydown",k)},[x,y,over]);
-  const reset=()=>{setGrid(empty());setScore(0);setOver(false);setPiece(Math.floor(Math.random()*SHAPES.length));setX(2);setY(0)};
-  return <main className="page game-page"><div className="game-top"><div><span>ORIGINAL GAME / 01</span><h1>BLOCK<br/><i>BLAST.</i></h1></div><div className="score">SCORE<strong>{score.toString().padStart(5,"0")}</strong></div></div>
-    <div className="board-wrap"><div className="block-board">{grid.map((r,yy)=>r.map((v,xx)=>{
-      let active=false; shape.forEach((rr,dy)=>rr.forEach((vv,dx)=>{if(vv&&xx===x+dx&&yy===y+dy)active=true}));
-      return <div key={xx+"-"+yy} className={(v||active)?"cell filled":"cell"}></div>
-    }))}</div>{over&&<div className="game-over"><b>GAME OVER</b><button onClick={reset}>RESTART</button></div>}</div>
-    <div className="controls"><button onClick={()=>valid(x-1,y)&&setX(v=>v-1)}>←</button><button onClick={()=>valid(x,y+1)&&setY(v=>v+1)}>↓</button><button onClick={()=>valid(x+1,y)&&setX(v=>v+1)}>→</button><button onClick={()=>{let yy=y;while(valid(x,yy+1))yy++;setY(yy)}}>DROP</button></div>
-    <p className="game-note">ARROWS / SPACE TO CONTROL · CLEAR FULL LINES</p>
+    const gained=cells*2+(clearCount?clearCount*clearCount*25:0);
+    const nextScore=score+gained;
+    setBoard(next);setScore(nextScore);setSelected(null);setHover(null);
+    if(nextScore>best){setBest(nextScore);localStorage.setItem('yasir-block-best',String(nextScore));}
+    const remaining=pieces.filter((_,i)=>i!==pieceIndex);
+    const nextPieces=remaining.length?remaining:[makePiece(),makePiece(),makePiece()];
+    setPieces(nextPieces);
+    requestAnimationFrame(()=>{
+      if(!nextPieces.some(p=>{for(let y=0;y<10;y++)for(let x=0;x<10;x++)if(canPlace(next,p.shape,y,x))return true;return false;})) setOver(true);
+    });
+  };
+  const reset=()=>{setBoard(empty());setPieces([makePiece(),makePiece(),makePiece()]);setSelected(null);setHover(null);setScore(0);setOver(false)};
+  const preview=(row,col)=>{
+    if(selected===null)return;
+    const p=pieces[selected];
+    if(!p)return;
+    if(!canPlace(board,p.shape,row,col)){setHover({row,col,valid:false});return;}
+    setHover({row,col,valid:true});
+  };
+  return <main className="page game-page block-page">
+    <div className="game-top"><div><span>ORIGINAL GAME / 01</span><h1>BLOCK<br/><i>BLAST.</i></h1></div><div className="score-pair"><div className="score"><small>SCORE</small><strong>{score}</strong></div><div className="score"><small>BEST</small><strong>{best}</strong></div></div></div>
+    <p className="game-sub">Pick a block, tap a spot, clear rows and columns. No falling pieces.</p>
+    <div className="block-wrap">
+      <div className="block-board-new" aria-label="Block Blast board">
+        {board.map((row,y)=>row.map((cell,x)=>{
+          let previewOn=false, previewValid=false;
+          if(hover&&selected!==null){const sh=pieces[selected]?.shape;previewOn=!!(sh&&y>=hover.row&&x>=hover.col&&y-hover.row<sh.length&&x-hover.col<sh[0].length&&sh[y-hover.row][x-hover.col]);previewValid=hover.valid;}
+          return <button key={`${x}-${y}`} className={`blast-cell ${cell?'occupied '+cell.color:''} ${previewOn?'preview '+(previewValid?'good':'bad'):''}`} onMouseEnter={()=>preview(y,x)} onMouseLeave={()=>setHover(null)} onClick={()=>selected!==null&&place(selected,y,x)} aria-label={`row ${y+1} column ${x+1}`}></button>
+        }))}
+      </div>
+      {over&&<div className="blast-overlay"><div><Icon name="game" size={32}/><b>NO MORE MOVES</b><span>SCORE {score}</span><button onClick={reset}>PLAY AGAIN</button></div></div>}
+    </div>
+    <div className="piece-tray">
+      {pieces.map((p,i)=><button key={i} className={`piece-card ${selected===i?'selected':''}`} onClick={()=>setSelected(selected===i?null:i)} aria-label={`Select block ${i+1}`}>
+        <div className="mini-shape" style={{'--piece-size': `${Math.max(24,Math.min(34,120/Math.max(p.shape.length,p.shape[0].length)))}px`}}>{p.shape.map((r,y)=>r.map((v,x)=><span key={`${x}-${y}`} className={v?p.color:''}></span>))}</div>
+      </button>)}
+    </div>
+    <div className="blast-actions"><span>{selected===null?'SELECT A BLOCK':'TAP A BOARD CELL'}</span><button onClick={reset}>RESTART</button></div>
+    <p className="game-note">10 × 10 BOARD · CLEAR FULL ROWS OR COLUMNS · SCORE + COMBO</p>
   </main>
 }
 
-function SpaceShooter() {
-  const ref=useRef(null), keys=useRef({}), raf=useRef(0), state=useRef(null);
-  const [score,setScore]=useState(0),[running,setRunning]=useState(true);
-  const reset=()=>{const c=ref.current;state.current={x:c.width/2,y:c.height-55,bullets:[],enemies:[],score:0,last:0,spawn:0,dead:false};setScore(0);setRunning(true)};
-  useEffect(()=>{reset();const down=e=>keys.current[e.key.toLowerCase()]=true,up=e=>keys.current[e.key.toLowerCase()]=false;addEventListener("keydown",down);addEventListener("keyup",up);return()=>{cancelAnimationFrame(raf.current);removeEventListener("keydown",down);removeEventListener("keyup",up)}},[]);
-  useEffect(()=>{const loop=t=>{const c=ref.current,s=state.current;if(!s||s.dead){raf.current=requestAnimationFrame(loop);return}const ctx=c.getContext("2d");if(!s.last)s.last=t;const dt=Math.min((t-s.last)/16.7,2);s.last=t;ctx.clearRect(0,0,c.width,c.height);
-    ctx.fillStyle="#f5f1e8";ctx.fillRect(0,0,c.width,c.height);ctx.strokeStyle="#111";ctx.lineWidth=2;
-    for(let i=0;i<30;i++){const yy=(i*37+t/18)%c.height;ctx.beginPath();ctx.moveTo((i*83)%c.width,yy);ctx.lineTo((i*83)%c.width,yy+2);ctx.stroke()}
-    if(keys.current["arrowleft"]||keys.current["a"])s.x-=5*dt;if(keys.current["arrowright"]||keys.current["d"])s.x+=5*dt;s.x=Math.max(18,Math.min(c.width-18,s.x));
-    if(keys.current[" "]||keys.current["space"]) {if(!s.cool)s.bullets.push({x:s.x,y:s.y});s.cool=9}else s.cool=Math.max(0,(s.cool||0)-1);
-    s.bullets.forEach(b=>b.y-=8*dt);s.bullets=s.bullets.filter(b=>b.y>-20);s.spawn-=dt;if(s.spawn<=0){s.enemies.push({x:20+Math.random()*(c.width-40),y:-20,v:1.2+Math.random()*1.8});s.spawn=28}
-    s.enemies.forEach(e=>e.y+=e.v*dt);for(const b of s.bullets)for(const e of s.enemies)if(Math.abs(b.x-e.x)<16&&Math.abs(b.y-e.y)<16){b.y=-100;e.y=c.height+100;s.score+=10;setScore(s.score)}
-    for(const e of s.enemies)if(e.y>c.height-70&&Math.abs(e.x-s.x)<22)s.dead=true;s.enemies=s.enemies.filter(e=>e.y<c.height+30);
-    ctx.fillStyle="#111";ctx.beginPath();ctx.moveTo(s.x,s.y-18);ctx.lineTo(s.x-17,s.y+14);ctx.lineTo(s.x,s.y+7);ctx.lineTo(s.x+17,s.y+14);ctx.closePath();ctx.fill();
-    ctx.fillStyle="#111";s.bullets.forEach(b=>ctx.fillRect(b.x-2,b.y-8,4,12));s.enemies.forEach(e=>{ctx.strokeRect(e.x-11,e.y-11,22,22);ctx.fillRect(e.x-3,e.y-3,6,6)});
-    if(s.dead){ctx.font="800 28px Arial";ctx.textAlign="center";ctx.fillText("SYSTEM DOWN",c.width/2,c.height/2);setRunning(false)} raf.current=requestAnimationFrame(loop)};raf.current=requestAnimationFrame(loop);return()=>cancelAnimationFrame(raf.current)},[]);
-  return <main className="page game-page"><div className="game-top"><div><span>ORIGINAL GAME / 02</span><h1>SPACE<br/><i>SHOOTER.</i></h1></div><div className="score">SCORE<strong>{score.toString().padStart(5,"0")}</strong></div></div><canvas ref={ref} className="shooter" width="760" height="460"></canvas><div className="shooter-controls"><button onClick={()=>keys.current["arrowleft"]=true}>←</button><button onClick={()=>keys.current[" "]=true}>FIRE</button><button onClick={()=>keys.current["arrowright"]=true}>→</button><button onClick={()=>{if(!running){state.current.dead=false;setRunning(true)}}}>RESTART</button></div><p className="game-note">A/D OR ARROWS TO MOVE · SPACE TO FIRE</p></main>
+function SpaceShooter(){
+  const canvasRef=useRef(null), keys=useRef({}), raf=useRef(0), state=useRef(null), pointer=useRef(false);
+  const [score,setScore]=useState(0),[dead,setDead]=useState(false);
+  const reset=()=>{
+    const c=canvasRef.current;
+    state.current={x:c.width/2,y:c.height-70,bullets:[],enemies:[],particles:[],score:0,last:0,spawn:0,cool:0,dead:false};
+    setScore(0);setDead(false);
+  };
+  useEffect(()=>{
+    reset();
+    const down=e=>{keys.current[e.key.toLowerCase()]=true;if(e.key===' ')e.preventDefault()};
+    const up=e=>{keys.current[e.key.toLowerCase()]=false};
+    addEventListener('keydown',down);addEventListener('keyup',up);
+    return()=>{cancelAnimationFrame(raf.current);removeEventListener('keydown',down);removeEventListener('keyup',up)};
+  },[]);
+  useEffect(()=>{
+    const c=canvasRef.current,ctx=c.getContext('2d');
+    const loop=t=>{
+      const s=state.current;
+      if(!s){raf.current=requestAnimationFrame(loop);return;}
+      const dt=Math.min((t-(s.last||t))/16.67,2);s.last=t;
+      ctx.clearRect(0,0,c.width,c.height);
+      const bg=ctx.createLinearGradient(0,0,0,c.height);bg.addColorStop(0,'#0b1020');bg.addColorStop(1,'#171b2d');ctx.fillStyle=bg;ctx.fillRect(0,0,c.width,c.height);
+      ctx.fillStyle='rgba(255,255,255,.65)';
+      for(let i=0;i<55;i++){const sx=(i*73)%c.width, sy=(i*97+t*0.018*(1+i%3))%c.height;ctx.fillRect(sx,sy,1+(i%2),1+(i%2));}
+      if(!s.dead){
+        if(keys.current.arrowleft||keys.current.a)s.x-=7*dt;
+        if(keys.current.arrowright||keys.current.d)s.x+=7*dt;
+        s.x=Math.max(22,Math.min(c.width-22,s.x));
+        if(keys.current[' ']||keys.current.space){if(s.cool<=0){s.bullets.push({x:s.x,y:s.y-24});s.cool=8;}} else s.cool=Math.max(0,s.cool-1);
+        s.cool=Math.max(0,s.cool-1);
+        s.bullets.forEach(b=>b.y-=11*dt);s.bullets=s.bullets.filter(b=>b.y>-30);
+        s.spawn-=dt;if(s.spawn<=0){s.enemies.push({x:28+Math.random()*(c.width-56),y:-30,v:1.1+Math.random()*1.8,size:13,phase:Math.random()*6.28});s.spawn=Math.max(10,30-s.score/80);}
+        s.enemies.forEach(e=>{e.y+=e.v*dt;e.x+=Math.sin((e.y/35)+e.phase)*0.7*dt;});
+        for(const b of s.bullets){for(const e of s.enemies){if(Math.abs(b.x-e.x)<e.size+4&&Math.abs(b.y-e.y)<e.size+5){b.y=-999;e.y=c.height+999;s.score+=10;setScore(s.score);for(let i=0;i<8;i++)s.particles.push({x:e.x,y:e.y,vx:(Math.random()-.5)*4,vy:(Math.random()-.5)*4,life:18});}}}
+        s.enemies=s.enemies.filter(e=>e.y<c.height+40);
+        for(const e of s.enemies)if(e.y>c.height-95&&Math.abs(e.x-s.x)<25){s.dead=true;setDead(true);}
+        s.particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life--;});s.particles=s.particles.filter(p=>p.life>0);
+      }
+      // player ship
+      ctx.save();ctx.translate(s.x,s.y);ctx.fillStyle='#c8ff00';ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,-23);ctx.lineTo(-20,16);ctx.lineTo(0,9);ctx.lineTo(20,16);ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle='#ff4aa2';ctx.fillRect(-5,8,10,9);ctx.restore();
+      ctx.fillStyle='#f7f4eb';s.bullets.forEach(b=>ctx.fillRect(b.x-2,b.y-10,4,12));
+      s.enemies.forEach(e=>{ctx.save();ctx.translate(e.x,e.y);ctx.fillStyle='#ff4aa2';ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-13,-7);ctx.lineTo(-5,-13);ctx.lineTo(0,-7);ctx.lineTo(5,-13);ctx.lineTo(13,-7);ctx.lineTo(9,10);ctx.lineTo(-9,10);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();});
+      s.particles.forEach(p=>{ctx.fillStyle='#fff';ctx.fillRect(p.x,p.y,3,3)});
+      if(s.dead){ctx.fillStyle='rgba(5,8,18,.78)';ctx.fillRect(0,0,c.width,c.height);ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font='900 34px Arial';ctx.fillText('GAME OVER',c.width/2,c.height/2-10);ctx.font='700 14px monospace';ctx.fillText(`SCORE ${s.score}`,c.width/2,c.height/2+22);}
+      raf.current=requestAnimationFrame(loop);
+    };
+    raf.current=requestAnimationFrame(loop);return()=>cancelAnimationFrame(raf.current);
+  },[]);
+  const hold=(key,on)=>e=>{e.preventDefault();keys.current[key]=on};
+  const fire=()=>{keys.current[' ']=true;setTimeout(()=>keys.current[' ']=false,120)};
+  const moveCanvas=e=>{const rect=canvasRef.current.getBoundingClientRect();const x=(e.clientX-rect.left)*(canvasRef.current.width/rect.width);if(state.current)state.current.x=Math.max(22,Math.min(canvasRef.current.width-22,x));};
+  return <main className="page game-page shooter-page"><div className="game-top"><div><span>ORIGINAL GAME / 02</span><h1>SPACE<br/><i>SHOOTER.</i></h1></div><div className="score"><small>SCORE</small><strong>{score}</strong></div></div>
+    <div className="shooter-frame"><canvas ref={canvasRef} className="shooter" width="420" height="620" onPointerMove={e=>pointer.current&&moveCanvas(e)} onPointerDown={e=>{pointer.current=true;moveCanvas(e);fire()}} onPointerUp={()=>pointer.current=false} onPointerLeave={()=>pointer.current=false}/></div>
+    <div className="shooter-controls"><button onPointerDown={hold('arrowleft',true)} onPointerUp={hold('arrowleft',false)} onPointerLeave={hold('arrowleft',false)}>◀</button><button onPointerDown={fire}>FIRE</button><button onPointerDown={hold('arrowright',true)} onPointerUp={hold('arrowright',false)} onPointerLeave={hold('arrowright',false)}>▶</button><button onClick={reset}>RESTART</button></div>
+    <p className="game-note">DRAG ON CANVAS · A/D OR ARROWS · FIRE TO SHOOT</p>
+  </main>
 }
 
 function Chat() {
-  const [messages,setMessages]=useState([{role:"assistant",content:"Hey. I'm Yasir's portfolio assistant. Ask me anything about the projects."}]),[input,setInput]=useState(""),[loading,setLoading]=useState(false);
-  const send=async()=>{if(!input.trim()||loading)return;const q=input.trim();setInput("");setMessages(m=>[...m,{role:"user",content:q}]);setLoading(true);
-    try { const r=await fetch("/chat", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:q})}); const d=await r.json(); setMessages(m=>[...m,{role:"assistant",content:d.reply||"No server-side AI route is configured yet."}]); } catch { setMessages(m=>[...m,{role:"assistant",content:"AI backend isn't connected yet. Add your server-side integration before deploying."}]); } finally{setLoading(false)}
+  const [messages,setMessages]=useState([{role:"assistant",content:"Hey. I'm Yasir's portfolio assistant. Ask me about the projects, games, or tools."}]);
+  const [input,setInput]=useState("");
+  const [loading,setLoading]=useState(false);
+
+  const send=async()=>{
+    const q=input.trim();
+    if(!q||loading)return;
+    const next=[...messages,{role:"user",content:q}];
+    setInput("");
+    setMessages(next);
+    setLoading(true);
+    try {
+      const r=await fetch("/chat",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          messages:next.map(({role,content})=>({role,content})),
+          model:"openai/gpt-5.6-sol"
+        })
+      });
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.error||"Request failed");
+      setMessages(m=>[...m,{role:"assistant",content:d.reply||"Empty response from xKiro."}]);
+    } catch(error) {
+      setMessages(m=>[...m,{role:"assistant",content:`AI error: ${error.message}`}]);
+    } finally { setLoading(false); }
   };
-  return <main className="page chat-page"><div className="page-head"><span>05 / CHAT</span><h1>TALK<br/><i>TO AI.</i></h1></div><div className="chatbox">{messages.map((m,i)=><div className={"msg "+m.role} key={i}><small>{m.role==="user"?"YOU":"YASIR AI"}</small><p>{m.content}</p></div>)}{loading&&<div className="msg assistant"><small>YASIR AI</small><p>THINKING...</p></div>}</div><div className="chat-input"><textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Type something..." /><button onClick={send}>SEND ↗</button></div></main>
+
+  return <main className="page chat-page">
+    <div className="canvas-heading">
+      <div><span>05 / CHAT</span><h1>YASIR<br/><i>AI.</i></h1></div>
+      <div className="canvas-icon"><Icon name="chat" size={34}/></div>
+    </div>
+    <div className="chat-canvas">
+      <div className="canvas-label"><span>LIVE CANVAS</span><span>{loading?"THINKING":"READY"}</span></div>
+      <div className="chatbox">
+        {messages.map((m,i)=><div className={"msg "+m.role} key={i}><div className="msg-head"><span className="msg-icon"><Icon name={m.role==="user"?"home":"chat"} size={15}/></span><small>{m.role==="user"?"YOU":"YASIR AI"}</small></div><p>{m.content}</p></div>)}
+        {loading&&<div className="msg assistant"><div className="msg-head"><span className="msg-icon"><Icon name="chat" size={15}/></span><small>YASIR AI</small></div><p className="typing"><b></b><b></b><b></b></p></div>}
+      </div>
+    </div>
+    <div className="chat-input">
+      <textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Ask about my work..." />
+      <button onClick={send} disabled={loading}><Icon name="arrow" size={19}/>{loading?"WAIT":"SEND"}</button>
+    </div>
+    <div className="chat-note"><Icon name="project" size={15}/> API key stays server-side · powered by xKiro</div>
+  </main>
 }
 
 function Projects({navigate}) {
