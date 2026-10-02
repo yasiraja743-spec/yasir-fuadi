@@ -1,33 +1,60 @@
-# Yasir Portfolio
+# YASIR Portfolio — Neo-Brutalist AI
 
-React + Vite portfolio with a clean neubrutalist look, a small canvas-style AI chat surface, original games, projects and tools.
+This is the Yasir portfolio rebuilt from the supplied portfolio source, with the chat workspace redesigned around the requested Neo-Brutalist look.
 
-## Included
+## AI features
 
-- Intro screen + responsive mobile navigation
-- `/chat` AI chat powered by xKiro through a server-side Vercel Routing Middleware handler
-- `/games/block-blast` — 10×10 Block Blast-style placement puzzle with 3-piece tray, line clearing, score and best score
-- `/games/space-shooter` — original canvas shooter with keyboard, touch buttons and drag-to-move controls
-- `/projects` — AM Premium, Telegram Bot and original games
-- `/tools/tiktok` — downloader UI ready for a provider integration
-- No copyrighted game sprites or external game engine
-- No public `/api/*` route is used for the AI chat
+- Text chat
+- Photo upload to the AI/vision model
+- Markdown rich text: headings, bold, italic, underline HTML, strikethrough, code, blockquotes, lists, links and tables
+- `<name folder>...</name folder>` is parsed from the first AI reply and becomes the browser chat folder name; the tag is never shown in the message
+- Per-conversation browser history
+- Video generation button and video player/download UI
+- API keys remain server-side in Vercel functions
 
-## Environment variable
+## Provider configuration
 
-Set this in Vercel Project Settings → Environment Variables:
+Copy `.env.example` to your Vercel environment variables.
 
-```env
-XKIRO_API_KEY=your_real_xkiro_key
+### Chat / vision
+
+The default adapter uses:
+
+`https://api.xkiro.com/v1/chat/completions`
+
+with:
+
+`XKIRO_MODEL=minimax/minimax-m3:free`
+
+Set `XKIRO_API_KEY`.
+
+The model/provider must support image input for photo understanding.
+
+### Video
+
+Video APIs differ in authentication, payloads, async jobs and response formats. `api/video.js` is deliberately an adapter.
+
+Set:
+
+- `VIDEO_API_URL`
+- `VIDEO_API_KEY`
+- `VIDEO_MODEL` (optional)
+
+The adapter sends `{ model, prompt }` and accepts a video URL from common response fields. If the chosen provider uses an asynchronous job flow, edit only `api/video.js` to poll that provider.
+
+## Run locally
+
+```bash
+npm install
+npm run dev
 ```
-
-The browser only calls `POST /chat`. The xKiro key is read server-side from `XKIRO_API_KEY` and is never placed in the React bundle.
 
 ## Deploy
 
-1. Push the project to GitHub.
-2. Import the repository into Vercel.
-3. Add `XKIRO_API_KEY` to the Production/Preview environments you want.
-4. Redeploy after adding or changing the variable.
+```bash
+npm run build
+```
 
-Vercel's Routing Middleware handles the `/chat` POST and forwards the request to xKiro. The Vite frontend keeps the clean page routes through `vercel.json` rewrites.
+Deploy the project to Vercel and add the environment variables in the Vercel project settings.
+
+Do not put API keys in `src/main.jsx` or any public file.
