@@ -2,21 +2,22 @@ import { next } from "@vercel/functions";
 
 const MODEL = "minimax/minimax-m3:free";
 const MAX_MESSAGES = 1000;
-const SYSTEM_PROMPT = `You are Yasir AI, the assistant inside Yasir's portfolio.
-Be helpful, natural, and remember the entire conversation supplied in the messages array.
+const SYSTEM_PROMPT = `Your name is Yasir AI. You are the AI assistant on Yasir's portfolio website (Yasir is a Full-Stack Developer who loves coding).
+Identity rules:
+- If asked your name or who you are, answer that you are Yasir AI. Always refer to yourself as Yasir AI.
+- Never claim to be human. If asked which model or company is behind you, say you don't have that detail instead of guessing.
+- Reply in the same language as the user (Indonesian if they write Indonesian).
 On the FIRST assistant response of a brand-new chat only, start with exactly one folder title marker on its own line in this format:
 <name folder>Short descriptive chat name</name folder>
-The folder name should be concise (2-6 words) and describe the actual conversation.
-Never emit that marker again after the chat already has a folder name.
-Do not rename an existing chat.
-Use Markdown freely: headings, bold, italic, inline code, fenced code blocks, links, lists, blockquotes, and tables when useful.
-If the user sends an image, inspect it before answering and refer only to what you can actually see.
-Do not claim to generate video. This MiniMax M3/xKiro chat model returns text; xKiro's current API supports image generation separately but does not provide video generation.`;
+The folder name must be 2-6 words and describe the conversation. Never emit that marker again once the chat already has a folder name.
+Use Markdown freely: headings, bold, italic, inline code, fenced code blocks with a language tag, links, lists, blockquotes and tables when useful.
+If the user sends an image, inspect it before answering and describe only what is actually visible.
+Capabilities: you can chat and read images. You cannot generate video (the provider has no video generation); if asked, say so honestly and never invent a video link.`;
 
 function cleanMessages(input) {
   if (!Array.isArray(input)) return [];
   return input
-    .filter(m => m && ["user", "assistant", "system"].includes(m.role))
+    .filter(m => m && ["user", "assistant"].includes(m.role))
     .map(m => {
       let content = m.content;
       if (typeof content === "string") return { role: m.role, content: content.slice(0, 200000) };
@@ -43,6 +44,7 @@ export const config = { matcher: "/chat" };
 export default async function middleware(request) {
   if (request.method !== "POST") return next();
 
+  if (Number(request.headers.get("content-length") || 0) > 6_000_000) return Response.json({ error: "Payload too large." }, { status: 413 });
   const apiKey = process.env.XKIRO_API_KEY;
   if (!apiKey) return Response.json({ error: "XKIRO_API_KEY is not configured on Vercel." }, { status: 500 });
 
@@ -53,8 +55,7 @@ export default async function middleware(request) {
   const messages = cleanMessages(body?.messages);
   if (!messages.length) return Response.json({ error: "messages is required." }, { status: 400 });
 
-  const hasSystem = messages.some(m => m.role === "system");
-  const upstreamMessages = hasSystem ? messages : [{ role: "system", content: SYSTEM_PROMPT }, ...messages];
+  const upstreamMessages = [{ role: "system", content: SYSTEM_PROMPT }, ...messages];
 
   try {
     const upstream = await fetch("https://api.xkiro.com/v1/chat/completions", {
