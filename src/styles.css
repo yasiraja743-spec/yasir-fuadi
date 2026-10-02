@@ -98,3 +98,40 @@
  .chat-folder-toggle{display:grid!important}
  .chat-folders.mobile-open{transform:none}
 }
+
+/* YASIR AI — FULL SCREEN CHAT */
+.chat-full{padding:0!important;min-height:0!important;height:calc(100dvh - 72px);overflow:hidden}
+.chat-full .chat-layout{max-width:none;height:100%;gap:0;grid-template-columns:270px minmax(0,1fr);align-items:stretch}
+.chat-full .chat-folders{position:static;max-height:none;height:100%;min-height:0;box-shadow:none;border-width:0 3px 0 0}
+.chat-full .chat-main{display:flex;flex-direction:column;height:100%;min-height:0}
+.chat-full .canvas-heading{display:none}
+.chat-full .chat-canvas{flex:1;min-height:0;display:flex;flex-direction:column;box-shadow:none;padding:0}
+.chat-full .canvas-label{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;font-size:10px;font-weight:900}
+.chat-full .chatbox{flex:1;height:auto;min-height:0;overflow:auto;padding:18px;display:flex;flex-direction:column;gap:14px}
+.chat-full .msg{max-width:min(860px,88%)}.chat-full .msg.user{align-self:flex-end}.chat-full .msg.assistant{align-self:flex-start}
+.chat-full .attachment-preview{margin:0 14px 8px;max-width:none}
+.chat-full .chat-input{padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));border-top:3px solid var(--ink);background:var(--paper)}
+.chat-full .chat-folder-toggle{display:none;width:38px;height:38px;font-size:18px}
+@media(max-width:800px){
+ .chat-full .chat-layout{display:block}
+ .chat-full .chat-main{height:100%}
+ .chat-full .chat-folders{position:fixed;height:auto;max-height:70vh;border-width:3px}
+ .chat-full .chat-folder-toggle{display:grid!important}
+ .chat-full .msg{max-width:94%}
+}
+
+/* CODE BLOCKS — label + copy + highlight */
+.rich-text .code-block{margin:14px 0;border:3px solid var(--ink);box-shadow:4px 4px 0 var(--pink);background:#171717}
+.rich-text .code-head{display:flex;justify-content:space-between;align-items:center;background:var(--lime);color:var(--ink);border-bottom:3px solid var(--ink);padding:6px 10px;font-size:11px;font-weight:900;text-transform:uppercase}
+.rich-text .copy-btn{border:2px solid var(--ink);background:var(--paper);box-shadow:2px 2px 0 var(--ink);padding:3px 10px;font-size:11px;font-weight:900;cursor:pointer}
+.rich-text .copy-btn:active{transform:translate(2px,2px);box-shadow:none}
+.rich-text .code-block pre{margin:0;border:0;box-shadow:none;background:transparent;padding:14px;overflow:auto;max-width:100%}
+.rich-text .code-block code{background:none;border:0;padding:0;color:#f4f0e7;font-size:13px;line-height:1.55;white-space:pre}
+.hljs-comment,.hljs-quote{color:#8a8a8a;font-style:italic}
+.hljs-keyword,.hljs-selector-tag,.hljs-literal,.hljs-built_in,.hljs-type{color:#ff79c6}
+.hljs-string,.hljs-regexp,.hljs-addition{color:#dfff00}
+.hljs-number,.hljs-symbol,.hljs-bullet{color:#ffb86c}
+.hljs-title,.hljs-section,.hljs-function .hljs-title{color:#8eb4ff}
+.hljs-attr,.hljs-attribute,.hljs-name,.hljs-variable,.hljs-property{color:#7ee7c7}
+.hljs-meta,.hljs-tag{color:#ff9b5e}
+.hljs-deletion{color:#ff6b6b}.hljs-emphasis{font-style:italic}.hljs-strong{font-weight:bold}

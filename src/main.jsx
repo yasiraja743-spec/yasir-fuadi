@@ -3,6 +3,49 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
+import hljs from "highlight.js/lib/core";
+import javascript from "highlight.js/lib/languages/javascript";
+import typescript from "highlight.js/lib/languages/typescript";
+import python from "highlight.js/lib/languages/python";
+import xml from "highlight.js/lib/languages/xml";
+import css from "highlight.js/lib/languages/css";
+import json from "highlight.js/lib/languages/json";
+import bash from "highlight.js/lib/languages/bash";
+import powershell from "highlight.js/lib/languages/powershell";
+import c from "highlight.js/lib/languages/c";
+import cpp from "highlight.js/lib/languages/cpp";
+import csharp from "highlight.js/lib/languages/csharp";
+import java from "highlight.js/lib/languages/java";
+import kotlin from "highlight.js/lib/languages/kotlin";
+import go from "highlight.js/lib/languages/go";
+import rust from "highlight.js/lib/languages/rust";
+import php from "highlight.js/lib/languages/php";
+import ruby from "highlight.js/lib/languages/ruby";
+import sql from "highlight.js/lib/languages/sql";
+import yaml from "highlight.js/lib/languages/yaml";
+import markdown from "highlight.js/lib/languages/markdown";
+Object.entries({javascript,typescript,python,xml,css,json,bash,powershell,c,cpp,csharp,java,kotlin,go,rust,php,ruby,sql,yaml,markdown}).forEach(([n,l])=>hljs.registerLanguage(n,l));
+hljs.registerAliases(["jsx","js","mjs"],{languageName:"javascript"});
+hljs.registerAliases(["tsx","ts"],{languageName:"typescript"});
+hljs.registerAliases(["html","svg"],{languageName:"xml"});
+hljs.registerAliases(["sh","shell","zsh","console"],{languageName:"bash"});
+hljs.registerAliases(["ps1","pwsh"],{languageName:"powershell"});
+hljs.registerAliases(["py"],{languageName:"python"});
+hljs.registerAliases(["yml"],{languageName:"yaml"});
+hljs.registerAliases(["md"],{languageName:"markdown"});
+
+const escHtml=t=>String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+marked.use({renderer:{code({text,lang}){
+  const l=String(lang||"").trim().split(/\s+/)[0].toLowerCase();
+  const known=l&&hljs.getLanguage(l);
+  const body=known?hljs.highlight(text,{language:l,ignoreIllegals:true}).value:escHtml(text);
+  return `<div class="code-block"><div class="code-head"><span>${escHtml(l||"text")}</span><button type="button" class="copy-btn">Copy</button></div><pre><code class="hljs">${body}</code></pre></div>`;
+}}});
+async function copyText(t){
+  try{await navigator.clipboard.writeText(t)}catch{
+    const a=document.createElement("textarea");a.value=t;a.style.cssText="position:fixed;opacity:0";document.body.append(a);a.select();document.execCommand("copy");a.remove();
+  }
+}
 
 const blocks = [
   ["HELLO", "01"], ["CODE", "02"], ["BUILD", "03"], ["PLAY", "04"]
@@ -284,7 +327,12 @@ function escapeText(s){return String(s||"");}
 function RichText({text}){
   const source=String(text||"");
   const html=DOMPurify.sanitize(marked.parse(source,{gfm:true,breaks:true}));
-  return <div className="rich-text" dangerouslySetInnerHTML={{__html:html}}/>;
+  const onClick=e=>{
+    const b=e.target.closest?.(".copy-btn"); if(!b)return;
+    const code=b.closest(".code-block")?.querySelector("code"); if(!code)return;
+    copyText(code.textContent||"").then(()=>{b.textContent="Copied ✓";setTimeout(()=>{b.textContent="Copy"},1500)});
+  };
+  return <div className="rich-text" onClick={onClick} dangerouslySetInnerHTML={{__html:html}}/>;
 }
 
 function FolderIcon(){return <svg className="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7.5h7l2 2h9v9.5H3z"/><path d="M3 7.5V5h7l2 2"/></svg>}
@@ -309,7 +357,6 @@ function Chat(){
   const [input,setInput]=useState("");
   const [attachment,setAttachment]=useState(null);
   const [loading,setLoading]=useState(false);
-  const [videoMode,setVideoMode]=useState(false);
   const fileRef=useRef(null);
   const active=chats.find(c=>c.id===activeId)||chats[0];
 
@@ -321,7 +368,7 @@ function Chat(){
     const c=makeChat();
     setChats(prev=>[c,...prev]);
     setActiveId(c.id);
-    setInput("");setAttachment(null);setVideoMode(false);
+    setInput("");setAttachment(null);
   };
 
   const deleteChat=id=>{
@@ -340,8 +387,8 @@ function Chat(){
       alert("Pilih file gambar: JPG, PNG, GIF atau WebP.");
       e.target.value="";return;
     }
-    if(f.size>12*1024*1024){
-      alert("Ukuran foto maksimal 12 MB.");
+    if(f.size>3*1024*1024){
+      alert("Ukuran foto maksimal 3 MB (batas request Vercel).");
       e.target.value="";return;
     }
     const reader=new FileReader();
@@ -369,7 +416,7 @@ function Chat(){
 
     try{
       const payload=nextMessages.map(m=>({role:m.role,content:m.content}));
-      const r=await fetch("/api/chat",{
+      const r=await fetch("/chat",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({messages:payload})
@@ -389,29 +436,9 @@ function Chat(){
     }finally{setLoading(false)}
   };
 
-  const generateVideo=async()=>{
-    const q=input.trim();
-    if(!q||loading)return;
-    const userMessage={role:"user",content:`🎥 ${q}`,media:null};
-    updateActive(c=>({...c,messages:[...c.messages,userMessage],updatedAt:Date.now()}));
-    setInput("");setLoading(true);setVideoMode(true);
-    try{
-      const r=await fetch("/api/video",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({prompt:q})
-      });
-      const d=await r.json();
-      if(!r.ok)throw new Error(d.error||"Video generation failed.");
-      updateActive(c=>({...c,messages:[...c.messages,{role:"assistant",content:"**Video generated.**",media:{type:"video",url:d.url}}],updatedAt:Date.now()}));
-    }catch(error){
-      updateActive(c=>({...c,messages:[...c.messages,{role:"assistant",content:`**Video error:** ${error.message}`}],updatedAt:Date.now()}));
-    }finally{setLoading(false);setVideoMode(false)}
-  };
-
   const renderMedia=m=>m.media?<ChatMedia item={m.media}/>:null;
 
-  return <main className="page chat-page">
+  return <main className="page chat-page chat-full">
     <div className="chat-layout">
       <aside className="chat-folders">
         <div className="folder-head"><div><span>CHAT AI</span><b>CONVERSATIONS</b></div><button onClick={newChat} aria-label="New chat">＋</button></div>
@@ -430,15 +457,15 @@ function Chat(){
 
         <div className="chat-canvas">
           <div className="canvas-label">
-            <span><FolderIcon/> {active?.name||"NEW CHAT"}</span>
-            <span>{loading?(videoMode?"GENERATING VIDEO":"THINKING"):"READY"}</span>
+            <span><button className="chat-folder-toggle canvas-icon" onClick={()=>document.querySelector(".chat-folders")?.classList.toggle("mobile-open")} aria-label="Open conversations">☰</button><FolderIcon/> {active?.name||"NEW CHAT"}</span>
+            <span>{loading?"THINKING":"READY"}</span>
           </div>
 
           <div className="chatbox">
             {active?.messages.length===0&&
               <div className="chat-welcome">
                 <Icon name="chat" size={25}/>
-                <div><b>{DEFAULT_ASSISTANT}</b><span>Send text, attach a photo, or use Generate Video when a video provider is configured.</span></div>
+                <div><b>{DEFAULT_ASSISTANT}</b><span>Tanya apa saja atau kirim foto. Enter = kirim, Shift+Enter = baris baru.</span></div>
               </div>
             }
 
@@ -480,7 +507,7 @@ function Chat(){
               value={input}
               onChange={e=>setInput(e.target.value)}
               onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}}
-              placeholder={videoMode?"Generating video...":"Ask about my work or attach a photo..."}
+              placeholder="Ask Yasir AI or attach a photo..."
               disabled={loading}
             />
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden onChange={pickFile}/>
@@ -490,10 +517,6 @@ function Chat(){
           </button>
         </div>
 
-        <div className="chat-actions">
-          <button className={videoMode?"active":""} onClick={generateVideo} disabled={loading||!input.trim()}>🎥 GENERATE VIDEO</button>
-          <span>PHOTO INPUT · RICH TEXT · VIDEO DOWNLOAD · SERVER-SIDE API KEY</span>
-        </div>
       </section>
     </div>
   </main>
@@ -516,6 +539,6 @@ function App(){
   useEffect(()=>{const f=()=>setPath(location.pathname);addEventListener("popstate",f);const t=setTimeout(()=>setIntro(false),2100);return()=>{removeEventListener("popstate",f);clearTimeout(t)}},[]);
   const navigate=p=>{history.pushState({}, "", p);setPath(p);scrollTo(0,0)};
   let content= path==="/chat"?<Chat/>:path==="/games"?<Games navigate={navigate}/>:path==="/games/block-blast"?<BlockBlast/>:path==="/games/space-shooter"?<SpaceShooter/>:path==="/tools"?<Tools navigate={navigate}/>:path==="/tools/tiktok"?<TikTok/>:path==="/projects"?<Projects navigate={navigate}/>:<Home navigate={navigate}/>;
-  return <><Intro done={!intro}/><Header openMenu={menu} setOpenMenu={setMenu}/><SideMenu open={menu} close={()=>setMenu(false)}/>{content}<footer><span>YASIR / FULL-STACK DEVELOPER</span><span>BUILT FROM SCRATCH / 2026</span></footer></>
+  return <><Intro done={!intro}/><Header openMenu={menu} setOpenMenu={setMenu}/><SideMenu open={menu} close={()=>setMenu(false)}/>{content}{path!=="/chat"&&<footer><span>YASIR / FULL-STACK DEVELOPER</span><span>BUILT FROM SCRATCH / 2026</span></footer>}</>
 }
 createRoot(document.getElementById("root")).render(<App/>);
