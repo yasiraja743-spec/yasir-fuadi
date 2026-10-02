@@ -532,7 +532,39 @@ function Projects({navigate}) {
 function Tools({navigate}) {
   return <main className="page section-pad"><div className="page-head"><span>06 / TOOLS</span><h1>USEFUL<br/><i>STUFF.</i></h1></div><div className="tool-card"><span>01 / TIKTOK</span><h2>TIKTOK<br/>DOWNLOADER</h2><p>Downloader interface ready for a secure server-side provider integration.</p><button onClick={()=>navigate("/tools/tiktok")}>OPEN TOOL ↗</button></div></main>
 }
-function TikTok(){return <main className="page section-pad"><div className="page-head"><span>06.01 / TOOL</span><h1>TIKTOK<br/><i>DOWNLOADER.</i></h1></div><div className="tool-form"><input placeholder="Paste TikTok URL..." /><button>PROCESS ↗</button><small>Provider integration must run server-side. No credentials are stored in the browser.</small></div></main>}
+function TikTok(){
+  const [url,setUrl]=useState(""),[loading,setLoading]=useState(false),[err,setErr]=useState(""),[r,setR]=useState(null);
+  const go=async()=>{
+    const u=url.trim(); if(!u||loading)return;
+    setLoading(true);setErr("");setR(null);
+    try{
+      const res=await fetch("/tools/tiktok",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:u})});
+      const d=await res.json().catch(()=>({}));
+      if(!res.ok)throw new Error(d.error||"Gagal memproses link.");
+      setR(d);
+    }catch(e){setErr(e.message)}finally{setLoading(false)}
+  };
+  const reset=()=>{setR(null);setUrl("");setErr("")};
+  const L=r?.links||{}, main=L.hd||L.play||L.wm;
+  return <main className="page section-pad">
+    <div className="page-head"><span>06.01 / TOOL</span><h1>TIKTOK<br/><i>DOWNLOADER.</i></h1></div>
+    {!r&&<div className="tool-form">
+      <input value={url} onChange={e=>setUrl(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="Paste TikTok URL..." inputMode="url" autoComplete="off"/>
+      <button onClick={go} disabled={loading||!url.trim()}>{loading?"PROCESSING...":"PROCESS ↗"}</button>
+      {err&&<div className="tt-err">{err}</div>}
+      <small>Unduh hanya video milikmu atau yang kamu punya izinnya. Proses berjalan di server.</small>
+    </div>}
+    {r&&<div className="tt-result">
+      {main&&<video className="tt-video" src={(L.play||main).url} poster={r.cover||undefined} controls playsInline preload="metadata"/>}
+      <p className="tt-caption">{r.author&&<b>@{r.author}<br/></b>}{r.title}</p>
+      {L.play&&<a className="tt-btn tt-blue" href={L.play.dl} download>Download without watermark</a>}
+      {L.hd&&<a className="tt-btn tt-green" href={L.hd.dl} download>Download without watermark (HD)</a>}
+      {L.wm&&<a className="tt-btn tt-gray" href={L.wm.dl} download>Download watermark</a>}
+      {L.mp3&&<a className="tt-btn tt-purple" href={L.mp3.dl} download>Download Mp3</a>}
+      <button className="tt-btn tt-black" onClick={reset}>UNDUH YANG LAIN</button>
+    </div>}
+  </main>
+}
 
 function App(){
   const [intro,setIntro]=useState(true),[menu,setMenu]=useState(false),[path,setPath]=useState(location.pathname);

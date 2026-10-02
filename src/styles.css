@@ -135,3 +135,12 @@
 .hljs-attr,.hljs-attribute,.hljs-name,.hljs-variable,.hljs-property{color:#7ee7c7}
 .hljs-meta,.hljs-tag{color:#ff9b5e}
 .hljs-deletion{color:#ff6b6b}.hljs-emphasis{font-style:italic}.hljs-strong{font-weight:bold}
+
+/* TIKTOK DOWNLOADER — result view */
+.tt-result{max-width:560px;display:flex;flex-direction:column;gap:12px}
+.tt-video{width:100%;max-height:70vh;background:#000;border:3px solid var(--ink);box-shadow:6px 6px 0 var(--ink)}
+.tt-caption{border:3px solid var(--ink);background:#fff;padding:12px;margin:6px 0;line-height:1.5;overflow-wrap:anywhere;font-weight:700}
+.tt-btn{display:block;width:100%;text-align:center;text-decoration:none;color:#fff;border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);padding:15px 12px;font:900 14px "Space Mono",monospace;cursor:pointer}
+.tt-btn:active{transform:translate(4px,4px);box-shadow:none}
+.tt-blue{background:#1d4ed8}.tt-green{background:#16a34a}.tt-gray{background:#4b5563}.tt-purple{background:#9333ea}.tt-black{background:#000}
+.tt-err{background:#ff4d4d;color:#fff;border:3px solid var(--ink);padding:9px 12px;margin-top:10px;font-weight:900}
