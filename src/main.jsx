@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 
 const blocks = [
   ["HELLO", "01"], ["CODE", "02"], ["BUILD", "03"], ["PLAY", "04"]
@@ -260,7 +262,7 @@ function SpaceShooter(){
   </main>
 }
 
-const CHAT_STORE = "yasir-ai-chats-v3";
+const CHAT_STORE = "yasir-ai-chats-v5";
 const DEFAULT_ASSISTANT = "Hey. I'm Yasir's portfolio assistant. Ask me anything about the projects, games, tools, or code.";
 
 function makeChat(){
@@ -280,45 +282,26 @@ function saveChats(chats){localStorage.setItem(CHAT_STORE,JSON.stringify(chats))
 
 function escapeText(s){return String(s||"");}
 function RichText({text}){
-  const lines=escapeText(text).split("\n");
-  const out=[]; let i=0;
-  const inline=(value,keyPrefix="i")=>{
-    const parts=value.split(/(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|\[[^\]]+\]\((?:https?:\/\/)[^)]+\))/g).filter(Boolean);
-    return parts.map((part,j)=>{
-      if(/^`[^`]+`$/.test(part)) return <code key={`${keyPrefix}-${j}`}>{part.slice(1,-1)}</code>;
-      if(/^\*\*.*\*\*$/.test(part)||/^__.*__$/.test(part)) return <strong key={`${keyPrefix}-${j}`}>{part.slice(2,-2)}</strong>;
-      if(/^\*.*\*$/.test(part)||/^_.*_$/.test(part)) return <em key={`${keyPrefix}-${j}`}>{part.slice(1,-1)}</em>;
-      const link=part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
-      if(link) return <a key={`${keyPrefix}-${j}`} href={link[2]} target="_blank" rel="noreferrer">{link[1]}</a>;
-      return <React.Fragment key={`${keyPrefix}-${j}`}>{part}</React.Fragment>;
-    });
-  };
-  while(i<lines.length){
-    const line=lines[i];
-    if(line.startsWith("```")){
-      const lang=line.slice(3).trim(); const code=[]; i++;
-      while(i<lines.length&&!lines[i].startsWith("```")){code.push(lines[i]);i++;}
-      i++;
-      out.push(<pre className="code-block" key={`code-${i}`}><div className="code-lang">{lang||"CODE"}</div><code>{code.join("\n")}</code></pre>); continue;
-    }
-    const h=line.match(/^(#{1,3})\s+(.+)$/);
-    if(h){out.push(React.createElement(`h${h[1].length}`,{key:`h-${i}`},inline(h[2])));i++;continue;}
-    if(/^>\s?/.test(line)){out.push(<blockquote key={`q-${i}`}>{inline(line.replace(/^>\s?/,""))}</blockquote>);i++;continue;}
-    if(/^\s*[-*]\s+/.test(line)){
-      const items=[]; while(i<lines.length&&/^\s*[-*]\s+/.test(lines[i])){items.push(<li key={`${i}`}>{inline(lines[i].replace(/^\s*[-*]\s+/,""),`li-${i}`)}</li>);i++;}
-      out.push(<ul key={`ul-${i}`}>{items}</ul>);continue;
-    }
-    if(/^\s*\d+\.\s+/.test(line)){
-      const items=[]; while(i<lines.length&&/^\s*\d+\.\s+/.test(lines[i])){items.push(<li key={`${i}`}>{inline(lines[i].replace(/^\s*\d+\.\s+/,""),`ol-${i}`)}</li>);i++;}
-      out.push(<ol key={`ol-${i}`}>{items}</ol>);continue;
-    }
-    if(line.trim()===""){out.push(<div className="rich-gap" key={`gap-${i}`}/>);i++;continue;}
-    out.push(<p key={`p-${i}`}>{inline(line,`p-${i}`)}</p>);i++;
-  }
-  return <div className="rich-text">{out}</div>;
+  const source=String(text||"");
+  const html=DOMPurify.sanitize(marked.parse(source,{gfm:true,breaks:true}));
+  return <div className="rich-text" dangerouslySetInnerHTML={{__html:html}}/>;
 }
 
 function FolderIcon(){return <svg className="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7.5h7l2 2h9v9.5H3z"/><path d="M3 7.5V5h7l2 2"/></svg>}
+
+function FolderIcon(){return <svg className="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7.5h7l2 2h9v9.5H3z"/><path d="M3 7.5V5h7l2 2"/></svg>}
+
+function stripFolderMarker(text){
+  const match=String(text||"").match(/<name\s+folder>\s*([\s\S]*?)\s*<\/name\s+folder>/i);
+  return {name:match?.[1]?.trim()||"", text:String(text||"").replace(match?.[0]||"","").trim()};
+}
+
+function ChatMedia({item}){
+  if(!item?.type)return null;
+  if(item.type==="image") return <img className="msg-media" src={item.data} alt={item.name||"Uploaded image"}/>;
+  if(item.type==="video") return <div className="generated-video"><video src={item.url} controls playsInline preload="metadata"/><a className="media-download" href={item.url} download="yasir-ai-video.mp4">↓ DOWNLOAD VIDEO</a></div>;
+  return null;
+}
 
 function Chat(){
   const [chats,setChats]=useState(loadChats);
@@ -326,45 +309,107 @@ function Chat(){
   const [input,setInput]=useState("");
   const [attachment,setAttachment]=useState(null);
   const [loading,setLoading]=useState(false);
+  const [videoMode,setVideoMode]=useState(false);
   const fileRef=useRef(null);
   const active=chats.find(c=>c.id===activeId)||chats[0];
 
-  useEffect(()=>{saveChats(chats)},[chats]);
+  useEffect(()=>saveChats(chats),[chats]);
 
-  const updateActive=(fn)=>setChats(prev=>prev.map(c=>c.id===activeId?fn(c):c));
-  const newChat=()=>{const c=makeChat();setChats(prev=>[c,...prev]);setActiveId(c.id);setInput("");setAttachment(null)};
-  const deleteChat=(id)=>{
-    setChats(prev=>{const next=prev.filter(c=>c.id!==id);const safe=next.length?next:[makeChat()];if(id===activeId)setActiveId(safe[0].id);return safe});
+  const updateActive=fn=>setChats(prev=>prev.map(c=>c.id===activeId?fn(c):c));
+
+  const newChat=()=>{
+    const c=makeChat();
+    setChats(prev=>[c,...prev]);
+    setActiveId(c.id);
+    setInput("");setAttachment(null);setVideoMode(false);
+  };
+
+  const deleteChat=id=>{
+    setChats(prev=>{
+      const next=prev.filter(c=>c.id!==id);
+      const safe=next.length?next:[makeChat()];
+      if(id===activeId)setActiveId(safe[0].id);
+      return safe;
+    });
   };
 
   const pickFile=e=>{
-    const f=e.target.files?.[0]; if(!f)return;
-    if(!f.type.startsWith("image/")){alert("Untuk MiniMax M3 di chat ini, pilih foto JPG/PNG/GIF/WebP.");e.target.value="";return;}
-    if(f.size>8*1024*1024){alert("Foto maksimal 8 MB.");e.target.value="";return;}
-    const reader=new FileReader(); reader.onload=()=>setAttachment({name:f.name,type:f.type,data:reader.result}); reader.readAsDataURL(f);
+    const f=e.target.files?.[0];
+    if(!f)return;
+    if(!f.type.startsWith("image/")){
+      alert("Pilih file gambar: JPG, PNG, GIF atau WebP.");
+      e.target.value="";return;
+    }
+    if(f.size>12*1024*1024){
+      alert("Ukuran foto maksimal 12 MB.");
+      e.target.value="";return;
+    }
+    const reader=new FileReader();
+    reader.onload=()=>setAttachment({name:f.name,type:f.type,data:reader.result});
+    reader.readAsDataURL(f);
     e.target.value="";
   };
 
   const send=async()=>{
-    const q=input.trim(); if((!q&&!attachment)||loading||!active)return;
-    const userContent=[];
-    if(q) userContent.push({type:"text",text:q});
-    if(attachment) userContent.push({type:"image_url",image_url:{url:attachment.data}});
-    const userMessage={role:"user",content:userContent.length===1&&userContent[0].type==="text"?q:userContent,attachment:attachment?{name:attachment.name,type:attachment.type,data:attachment.data}:undefined};
+    const q=input.trim();
+    if((!q&&!attachment)||loading||!active)return;
+
+    const content=[];
+    if(q)content.push({type:"text",text:q});
+    if(attachment)content.push({type:"image_url",image_url:{url:attachment.data}});
+
+    const userMessage={
+      role:"user",
+      content:content.length===1&&content[0].type==="text"?q:content,
+      media:attachment?{type:"image",name:attachment.name,data:attachment.data}:null
+    };
     const nextMessages=[...active.messages,userMessage];
     updateActive(c=>({...c,messages:nextMessages,updatedAt:Date.now()}));
     setInput("");setAttachment(null);setLoading(true);
+
     try{
       const payload=nextMessages.map(m=>({role:m.role,content:m.content}));
-      const r=await fetch("/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:payload})});
-      const d=await r.json(); if(!r.ok)throw new Error(d.error||"Request failed");
-      const raw=String(d.reply||"Empty response from xKiro.");
-      const folderMatch=raw.match(/<name folder>\s*([\s\S]*?)\s*<\/name folder>/i);
-      const reply=raw.replace(/<name folder>[\s\S]*?<\/name folder>/i,"").trim();
-      updateActive(c=>({...c,messages:[...c.messages,{role:"assistant",content:reply}],name:c.name==="New chat"&&folderMatch?folderMatch[1].trim().slice(0,70):c.name,updatedAt:Date.now()}));
-    }catch(error){updateActive(c=>({...c,messages:[...c.messages,{role:"assistant",content:`AI error: ${error.message}`}],updatedAt:Date.now()}));}
-    finally{setLoading(false)}
+      const r=await fetch("/api/chat",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({messages:payload})
+      });
+      const d=await r.json();
+      if(!r.ok)throw new Error(d.error||"Request failed");
+
+      const parsed=stripFolderMarker(d.reply||"");
+      updateActive(c=>({
+        ...c,
+        messages:[...c.messages,{role:"assistant",content:parsed.text}],
+        name:c.name==="New chat"&&parsed.name?parsed.name.slice(0,70):c.name,
+        updatedAt:Date.now()
+      }));
+    }catch(error){
+      updateActive(c=>({...c,messages:[...c.messages,{role:"assistant",content:`**AI error:** ${error.message}`}],updatedAt:Date.now()}));
+    }finally{setLoading(false)}
   };
+
+  const generateVideo=async()=>{
+    const q=input.trim();
+    if(!q||loading)return;
+    const userMessage={role:"user",content:`🎥 ${q}`,media:null};
+    updateActive(c=>({...c,messages:[...c.messages,userMessage],updatedAt:Date.now()}));
+    setInput("");setLoading(true);setVideoMode(true);
+    try{
+      const r=await fetch("/api/video",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({prompt:q})
+      });
+      const d=await r.json();
+      if(!r.ok)throw new Error(d.error||"Video generation failed.");
+      updateActive(c=>({...c,messages:[...c.messages,{role:"assistant",content:"**Video generated.**",media:{type:"video",url:d.url}}],updatedAt:Date.now()}));
+    }catch(error){
+      updateActive(c=>({...c,messages:[...c.messages,{role:"assistant",content:`**Video error:** ${error.message}`}],updatedAt:Date.now()}));
+    }finally{setLoading(false);setVideoMode(false)}
+  };
+
+  const renderMedia=m=>m.media?<ChatMedia item={m.media}/>:null;
 
   return <main className="page chat-page">
     <div className="chat-layout">
@@ -378,30 +423,81 @@ function Chat(){
       </aside>
 
       <section className="chat-main">
-        <div className="canvas-heading compact"><div><span>YASIR AI / MINIMAX M3</span><h1>CHAT<br/><i>ROOM.</i></h1></div><div className="canvas-icon"><Icon name="chat" size={34}/></div></div>
+        <div className="canvas-heading compact">
+          <div><span>YASIR AI / CHAT WORKSPACE</span><h1>CHAT<br/><i>ROOM.</i></h1></div>
+          <div className="chat-heading-actions"><button className="canvas-icon chat-folder-toggle" onClick={()=>document.querySelector(".chat-folders")?.classList.toggle("mobile-open")} aria-label="Open conversations">☰</button><div className="canvas-icon"><Icon name="chat" size={34}/></div></div>
+        </div>
+
         <div className="chat-canvas">
-          <div className="canvas-label"><span><FolderIcon/> {active?.name||"NEW CHAT"}</span><span>{loading?"THINKING":"READY"}</span></div>
+          <div className="canvas-label">
+            <span><FolderIcon/> {active?.name||"NEW CHAT"}</span>
+            <span>{loading?(videoMode?"GENERATING VIDEO":"THINKING"):"READY"}</span>
+          </div>
+
           <div className="chatbox">
-            {active?.messages.length===0&&<div className="chat-welcome"><Icon name="chat" size={25}/><div><b>{DEFAULT_ASSISTANT}</b><span>Start typing and MiniMax M3 will name this folder automatically.</span></div></div>}
-            {active?.messages.map((m,i)=><div className={`msg ${m.role}`} key={i}>
-              <div className="msg-head"><span className="msg-icon"><Icon name={m.role==="user"?"home":"chat"} size={15}/></span><small>{m.role==="user"?"YOU":"YASIR AI"}</small></div>
-              {m.attachment?.type?.startsWith("image/")&&<img className="msg-image" src={m.attachment.data} alt={m.attachment.name||"Uploaded image"}/>} 
-              {typeof m.content==="string"?<RichText text={m.content}/>:<RichText text={(m.content||[]).filter(x=>x.type==="text").map(x=>x.text).join("\n")}/>} 
-            </div>)}
-            {loading&&<div className="msg assistant"><div className="msg-head"><span className="msg-icon"><Icon name="chat" size={15}/></span><small>YASIR AI / M3</small></div><p className="typing"><b></b><b></b><b></b></p></div>}
+            {active?.messages.length===0&&
+              <div className="chat-welcome">
+                <Icon name="chat" size={25}/>
+                <div><b>{DEFAULT_ASSISTANT}</b><span>Send text, attach a photo, or use Generate Video when a video provider is configured.</span></div>
+              </div>
+            }
+
+            {active?.messages.map((m,i)=>
+              <div className={`msg ${m.role}`} key={i}>
+                <div className="msg-head">
+                  <span className="msg-icon"><Icon name={m.role==="user"?"home":"chat"} size={15}/></span>
+                  <small>{m.role==="user"?"YOU":"YASIR AI"}</small>
+                </div>
+                {m.media?.type==="image"&&renderMedia(m)}
+                {typeof m.content==="string"
+                  ?<RichText text={m.content}/>
+                  :<RichText text={(m.content||[]).filter(x=>x.type==="text").map(x=>x.text).join("\n")}/>}
+                {m.media?.type==="video"&&renderMedia(m)}
+              </div>
+            )}
+
+            {loading&&
+              <div className="msg assistant">
+                <div className="msg-head"><span className="msg-icon"><Icon name="chat" size={15}/></span><small>YASIR AI</small></div>
+                <p className="typing"><b></b><b></b><b></b></p>
+              </div>
+            }
           </div>
         </div>
-        {attachment&&<div className="attachment-preview"><img src={attachment.data} alt="Preview"/><span>{attachment.name}</span><button onClick={()=>setAttachment(null)}>×</button></div>}
+
+        {attachment&&
+          <div className="attachment-preview">
+            <img src={attachment.data} alt="Preview"/>
+            <span>{attachment.name}</span>
+            <button onClick={()=>setAttachment(null)}>×</button>
+          </div>
+        }
+
         <div className="chat-input chat-input-rich">
-          <div className="composer"><button className="attach-btn" onClick={()=>fileRef.current?.click()} aria-label="Attach image">＋</button><textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Ask anything or attach a photo..." /><input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden onChange={pickFile}/></div>
-          <button onClick={send} disabled={loading||(!input.trim()&&!attachment)}><Icon name="arrow" size={19}/>{loading?"WAIT":"SEND"}</button>
+          <div className="composer">
+            <button className="attach-btn" onClick={()=>fileRef.current?.click()} aria-label="Attach image">＋</button>
+            <textarea
+              value={input}
+              onChange={e=>setInput(e.target.value)}
+              onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}}
+              placeholder={videoMode?"Generating video...":"Ask about my work or attach a photo..."}
+              disabled={loading}
+            />
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden onChange={pickFile}/>
+          </div>
+          <button onClick={send} disabled={loading||(!input.trim()&&!attachment)}>
+            <Icon name="arrow" size={19}/>{loading?"WAIT":"SEND"}
+          </button>
         </div>
-        <div className="chat-note"><Icon name="project" size={15}/> MINIMAX M3 · VISION INPUT · 1M CONTEXT · SERVER-SIDE KEY</div>
+
+        <div className="chat-actions">
+          <button className={videoMode?"active":""} onClick={generateVideo} disabled={loading||!input.trim()}>🎥 GENERATE VIDEO</button>
+          <span>PHOTO INPUT · RICH TEXT · VIDEO DOWNLOAD · SERVER-SIDE API KEY</span>
+        </div>
       </section>
     </div>
   </main>
 }
-
 function Projects({navigate}) {
   return <main className="page section-pad"><div className="page-head"><span>03 / PROJECTS</span><h1>THINGS<br/><i>I BUILT.</i></h1></div><div className="project-grid">
     <article><div className="project-no">01</div><h2>AM PREMIUM</h2><p>Premium web experience and utility project.</p><a href="https://lucifer-am.us.ci" target="_blank">OPEN ↗</a></article>
