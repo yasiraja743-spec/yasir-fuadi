@@ -1,6 +1,6 @@
 import { next } from "@vercel/functions";
 
-const MODEL = "minimax/minimax-m3:free";
+const MODEL = "mistralai/mistral-medium-3.5";
 const MAX_MESSAGES = 1000;
 const SYSTEM_PROMPT = `Your name is Yasir AI. You are the AI assistant on Yasir's portfolio website (Yasir is a Full-Stack Developer who loves coding).
 Identity rules:
